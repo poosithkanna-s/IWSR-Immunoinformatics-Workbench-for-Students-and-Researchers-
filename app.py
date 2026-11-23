@@ -1,6 +1,14 @@
 from flask import Flask, render_template, request
 
 app = Flask(__name__)
+import json
+from models import db, Analysis
+
+app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///immunology.db"
+db.init_app(app)
+
+with app.app_context():
+    db.create_all() 
 
 # Each condition and the symptoms that point towards it
 CONDITIONS = {
@@ -133,7 +141,14 @@ def antigen():
                 'hydrophilic': hydrophilic_regions[:5],
                 'antigenicity': min(100, round(antigenicity)),
             }
+            db.session.add(Analysis(
+                kind="antigen",
+                input_text=seq,
+                result_json=json.dumps(result),
+            ))
+            db.session.commit()
 
+ 
     return render_template('antigen.html', result=result, error=error)
 
 
@@ -163,6 +178,12 @@ def interaction():
 
     return render_template('interaction.html', result=result, error=error)
 
+@app.route('/history')
+def history():
+    rows = db.session.execute(
+        db.select(Analysis).order_by(Analysis.created_at.desc()).limit(50)
+    ).scalars().all()
+    return render_template('history.html', rows=rows)
 
 if __name__ == '__main__':
     app.run(debug=True)
